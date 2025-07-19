@@ -15,3 +15,9 @@ py-modules = ["aiomonad"]
 
 [tool.setuptools.package-dir]
 "" = "src/main/python"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.17.0",
+    "ruff>=0.12.4",
+]
