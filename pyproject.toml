@@ -21,3 +21,12 @@ dev = [
     "mypy>=1.17.0",
     "ruff>=0.12.4",
 ]
+
+[tool.mypy]
+explicit_package_bases = true
+mypy_path = [
+    "src/main/python",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
