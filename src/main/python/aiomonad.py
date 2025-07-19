@@ -5,10 +5,11 @@ __all__ = [
 ]
 
 import enum
-from collections.abc import Awaitable, Generator
+from collections.abc import Awaitable, Callable, Generator
 from typing import Any, Final, TypeVar, final
 
 T = TypeVar("T")
+U = TypeVar("U")
 
 
 @final
@@ -28,6 +29,14 @@ class AwaitableMonad(Awaitable[T]):
 
     def __await__(self) -> Generator[Any, Any, T]:
         return self.__awaitable.__await__()
+
+    def bind(self, f: Callable[[T], Awaitable[U]]) -> AwaitableMonad[U]:
+        async def bind() -> U:
+            return await f(await self)
+
+        return AwaitableMonad(bind())
+
+    __mul__ = bind
 
 
 pure: Final = Pure.instance
