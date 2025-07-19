@@ -38,5 +38,13 @@ class AwaitableMonad(Awaitable[T]):
 
     __mul__ = bind
 
+    def map(self, f: Callable[[T], U]) -> AwaitableMonad[U]:
+        async def bind() -> U:
+            return f(await self)
+
+        return AwaitableMonad(bind())
+
+    __truediv__ = map
+
 
 pure: Final = Pure.instance
