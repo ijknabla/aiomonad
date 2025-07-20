@@ -107,9 +107,12 @@ class AwaitableMonad(Awaitable[T]):
 
 
 @final
-class TappedAwaitableMonad(Generic[T]):
+class TappedAwaitableMonad(Awaitable[T]):
     def __init__(self, monad: AwaitableMonad[T]) -> None:
         self.__monad = monad
+
+    def __await__(self) -> Generator[Any, Any, T]:
+        return self.__monad.__await__()
 
     def map(self, f: Callable[[T], U]) -> AwaitableMonad[T]:
         async def bind() -> T:
