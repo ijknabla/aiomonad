@@ -18,10 +18,7 @@ from collections.abc import (
     Iterable,
 )
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Final, Generic, TypeVar, final, overload
-
-if TYPE_CHECKING:
-    from typing_extensions import Self
+from typing import Any, Final, TypeVar, final, overload
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -170,9 +167,6 @@ class AsyncIteratorMonad(AsyncIterator[T]):
     def __init__(self, iterator: AsyncIterator[T]) -> None:
         self.__iterator = iterator
 
-    def __aiter__(self) -> Self:
-        return self
-
     def __anext__(self) -> Awaitable[T]:
         return self.__iterator.__anext__()
 
@@ -228,9 +222,12 @@ class AsyncIteratorMonad(AsyncIterator[T]):
     __floordiv__ = map_async
 
 
-class TappedAsyncIterator(Generic[T]):
+class TappedAsyncIterator(AsyncIterator[T]):
     def __init__(self, monad: AsyncIteratorMonad[T]) -> None:
         self.__monad = monad
+
+    def __anext__(self) -> Awaitable[T]:
+        return self.__monad.__anext__()
 
     def map(self, f: Callable[[T], U]) -> AsyncIteratorMonad[T]:
         async def map() -> AsyncIterator[T]:
