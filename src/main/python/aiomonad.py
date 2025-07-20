@@ -17,6 +17,7 @@ from collections.abc import (
     Generator,
     Iterable,
 )
+from functools import wraps
 from typing import TYPE_CHECKING, Any, Final, Generic, TypeVar, final, overload
 
 if TYPE_CHECKING:
@@ -30,28 +31,48 @@ U = TypeVar("U")
 class Pure(enum.Enum):
     instance = enum.auto()
 
-    def __call__(self, x: T) -> AwaitableMonad[T]:
+    def lift(self, x: T) -> AwaitableMonad[T]:
         async def awaitable() -> T:
             return x
 
         return AwaitableMonad(awaitable())
+
+    __call__ = lift
+
+    def fun(self, f: Callable[[T], U]) -> Callable[[T], AwaitableMonad[U]]:
+        @wraps(f)
+        def wrapped(x: T, /) -> AwaitableMonad[U]:
+            return self.lift(f(x))
+
+        return wrapped
+
+    __getitem__ = fun
 
 
 @final
 class Do(enum.Enum):
     instance = enum.auto()
 
-    def __call__(self, awaitable: Awaitable[T]) -> AwaitableMonad[T]:
+    def lift(self, awaitable: Awaitable[T]) -> AwaitableMonad[T]:
         return AwaitableMonad(awaitable)
+
+    __call__ = lift
+
+    def fun(self, f: Callable[[T], Awaitable[U]]) -> Callable[[T], AwaitableMonad[U]]:
+        @wraps(f)
+        def wrapped(x: T, /) -> AwaitableMonad[U]:
+            return self(f(x))
+
+        return wrapped
+
+    __getitem__ = fun
 
 
 @final
 class Foreach(enum.Enum):
     instance = enum.auto()
 
-    def __call__(
-        self, iterable: Iterable[T] | AsyncIterable[T]
-    ) -> AsyncIteratorMonad[T]:
+    def lift(self, iterable: Iterable[T] | AsyncIterable[T]) -> AsyncIteratorMonad[T]:
         if isinstance(iterable, AsyncIterable):
             return AsyncIteratorMonad(iterable.__aiter__())
 
@@ -60,6 +81,17 @@ class Foreach(enum.Enum):
                 yield x
 
         return AsyncIteratorMonad(iterator())
+
+    __call__ = lift
+
+    def fun(
+        self, f: Callable[[T], Iterable[U]] | Callable[[T], AsyncIterable[U]]
+    ) -> Callable[[T], AsyncIteratorMonad[U]]:
+        @wraps(f)
+        def wrapped(x: T, /) -> AsyncIteratorMonad[U]:
+            return self.lift(f(x))
+
+        return wrapped
 
 
 @final
