@@ -152,7 +152,7 @@ class End(enum.Enum):
     instance = enum.auto()
 
 
-class BasicAwaitableMonad(Awaitable[T]):
+class BasicAwaitable(Awaitable[T]):
     def __init__(self, awaitable: Awaitable[T]) -> None:
         self._awaitable = awaitable
 
@@ -161,11 +161,11 @@ class BasicAwaitableMonad(Awaitable[T]):
 
 
 @final
-class AwaitableMonad(BasicAwaitableMonad[T]):
-    def tap(self) -> TappedAwaitableMonad[T]:
-        return TappedAwaitableMonad(self._awaitable)
+class AwaitableMonad(BasicAwaitable[T]):
+    def tap(self) -> TappedAwaitable[T]:
+        return TappedAwaitable(self._awaitable)
 
-    def __mod__(self, operation: Tap) -> TappedAwaitableMonad[T]:
+    def __mod__(self, operation: Tap) -> TappedAwaitable[T]:
         if operation is tap:
             return self.tap()
 
@@ -189,7 +189,7 @@ class AwaitableMonad(BasicAwaitableMonad[T]):
 
 
 @final
-class TappedAwaitableMonad(BasicAwaitableMonad[T]):
+class TappedAwaitable(BasicAwaitable[T]):
     def map(self, f: Callable[[T], U]) -> AwaitableMonad[T]:
         async def bind() -> T:
             f(x := await self)
@@ -209,16 +209,18 @@ class TappedAwaitableMonad(BasicAwaitableMonad[T]):
     __floordiv__ = map_async
 
 
-@final
-class AsyncIteratorMonad(AsyncIterator[T]):
+class BasicAsyncIterator(AsyncIterator[T]):
     def __init__(self, iterator: AsyncIterator[T]) -> None:
-        self.__iterator = iterator
+        self._iterator = iterator
 
     def __anext__(self) -> Awaitable[T]:
-        return self.__iterator.__anext__()
+        return self._iterator.__anext__()
 
+
+@final
+class AsyncIteratorMonad(BasicAsyncIterator[T]):
     def tap(self) -> TappedAsyncIterator[T]:
-        return TappedAsyncIterator(self)
+        return TappedAsyncIterator(self._iterator)
 
     def end(self) -> AwaitableMonad[tuple[T, ...]]:
         async def end() -> tuple[T, ...]:
@@ -269,16 +271,11 @@ class AsyncIteratorMonad(AsyncIterator[T]):
     __floordiv__ = map_async
 
 
-class TappedAsyncIterator(AsyncIterator[T]):
-    def __init__(self, monad: AsyncIteratorMonad[T]) -> None:
-        self.__monad = monad
-
-    def __anext__(self) -> Awaitable[T]:
-        return self.__monad.__anext__()
-
+@final
+class TappedAsyncIterator(BasicAsyncIterator[T]):
     def map(self, f: Callable[[T], U]) -> AsyncIteratorMonad[T]:
         async def map() -> AsyncIterator[T]:
-            async for x in self.__monad:
+            async for x in self:
                 f(x)
                 yield x
 
@@ -288,7 +285,7 @@ class TappedAsyncIterator(AsyncIterator[T]):
 
     def map_async(self, f: Callable[[T], Awaitable[U]]) -> AsyncIteratorMonad[T]:
         async def map_async() -> AsyncIterator[T]:
-            async for x in self.__monad:
+            async for x in self:
                 await f(x)
                 yield x
 
@@ -297,12 +294,12 @@ class TappedAsyncIterator(AsyncIterator[T]):
     __floordiv__ = map_async
 
 
-class AsyncContextManagerMonad(AbstractAsyncContextManager[T]):
+class BasicAsyncContextManager(AbstractAsyncContextManager[T]):
     def __init__(self, context_manager: AbstractAsyncContextManager[T]) -> None:
-        self.__context_manager = context_manager
+        self._context_manager = context_manager
 
     def __aenter__(self) -> Coroutine[Any, Any, T]:
-        return self.__context_manager.__aenter__()
+        return self._context_manager.__aenter__()
 
     def __aexit__(
         self,
@@ -310,10 +307,12 @@ class AsyncContextManagerMonad(AbstractAsyncContextManager[T]):
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> Coroutine[Any, Any, bool | None]:
-        return self.__context_manager.__aexit__(exc_type, exc_value, traceback)
+        return self._context_manager.__aexit__(exc_type, exc_value, traceback)
 
-    def tap(self) -> TappedAsyncContextManagerMonad[T]:
-        return TappedAsyncContextManagerMonad(self)
+
+class AsyncContextManagerMonad(BasicAsyncContextManager[T]):
+    def tap(self) -> TappedAsyncContextManager[T]:
+        return TappedAsyncContextManager(self._context_manager)
 
     def end(self) -> AwaitableMonad[T]:
         async def end() -> T:
@@ -323,14 +322,14 @@ class AsyncContextManagerMonad(AbstractAsyncContextManager[T]):
         return AwaitableMonad(end())
 
     @overload
-    def __mod__(self, operation: Tap) -> TappedAsyncContextManagerMonad[T]: ...
+    def __mod__(self, operation: Tap) -> TappedAsyncContextManager[T]: ...
 
     @overload
     def __mod__(self, operation: End) -> AwaitableMonad[T]: ...
 
     def __mod__(
         self, operation: Tap | End
-    ) -> TappedAsyncContextManagerMonad[T] | AwaitableMonad[T]:
+    ) -> TappedAsyncContextManager[T] | AwaitableMonad[T]:
         if operation is tap:
             return self.tap()
         elif operation is end:
@@ -370,21 +369,7 @@ class AsyncContextManagerMonad(AbstractAsyncContextManager[T]):
     __floordiv__ = map_async
 
 
-class TappedAsyncContextManagerMonad(AbstractAsyncContextManager[T]):
-    def __init__(self, monad: AsyncContextManagerMonad[T]) -> None:
-        self.__monad = monad
-
-    def __aenter__(self) -> Coroutine[Any, Any, T]:
-        return self.__monad.__aenter__()
-
-    def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> Coroutine[Any, Any, bool | None]:
-        return self.__monad.__aexit__(exc_type, exc_value, traceback)
-
+class TappedAsyncContextManager(BasicAsyncContextManager[T]):
     def map(self, f: Callable[[T], U]) -> AsyncContextManagerMonad[T]:
         @asynccontextmanager
         async def map() -> AsyncIterator[T]:
