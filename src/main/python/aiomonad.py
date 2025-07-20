@@ -4,6 +4,7 @@ __all__ = [
     "pure",
     "do",
     "foreach",
+    "using",
     "end",
     "tap",
 ]
@@ -14,10 +15,17 @@ from collections.abc import (
     AsyncIterator,
     Awaitable,
     Callable,
+    Coroutine,
     Generator,
     Iterable,
 )
+from contextlib import (
+    AbstractAsyncContextManager,
+    AbstractContextManager,
+    asynccontextmanager,
+)
 from functools import wraps
+from types import TracebackType
 from typing import Any, Final, TypeVar, final, overload
 
 T = TypeVar("T")
@@ -51,6 +59,9 @@ class Do(enum.Enum):
     instance = enum.auto()
 
     def lift(self, awaitable: Awaitable[T]) -> AwaitableMonad[T]:
+        if isinstance(awaitable, AwaitableMonad):
+            return awaitable
+
         return AwaitableMonad(awaitable)
 
     __call__ = lift
@@ -70,14 +81,16 @@ class Foreach(enum.Enum):
     instance = enum.auto()
 
     def lift(self, iterable: Iterable[T] | AsyncIterable[T]) -> AsyncIteratorMonad[T]:
-        if isinstance(iterable, AsyncIterable):
+        if isinstance(iterable, AsyncIteratorMonad):
+            return iterable
+        elif isinstance(iterable, AsyncIterable):
             return AsyncIteratorMonad(iterable.__aiter__())
 
-        async def iterator() -> AsyncIterator[T]:
+        async def async_iterator() -> AsyncIterator[T]:
             for x in iterable:
                 yield x
 
-        return AsyncIteratorMonad(iterator())
+        return AsyncIteratorMonad(async_iterator())
 
     __call__ = lift
 
@@ -89,6 +102,44 @@ class Foreach(enum.Enum):
             return self.lift(f(x))
 
         return wrapped
+
+    __getitem__ = fun
+
+
+@final
+class Using(enum.Enum):
+    instance = enum.auto()
+
+    def lift(
+        self,
+        context_manager: AbstractContextManager[T] | AbstractAsyncContextManager[T],
+    ) -> AsyncContextManagerMonad[T]:
+        if isinstance(context_manager, AsyncContextManagerMonad):
+            return context_manager
+        elif isinstance(context_manager, AbstractAsyncContextManager):
+            return AsyncContextManagerMonad(context_manager)
+
+        @asynccontextmanager
+        async def async_context_manager() -> AsyncIterator[T]:
+            with context_manager as x:
+                yield x
+
+        return AsyncContextManagerMonad(async_context_manager())
+
+    __call__ = lift
+
+    def fun(
+        self,
+        f: Callable[[T], AbstractContextManager[U]]
+        | Callable[[T], AbstractAsyncContextManager[U]],
+    ) -> Callable[[T], AsyncContextManagerMonad[U]]:
+        @wraps(f)
+        def wrapped(x: T, /) -> AsyncContextManagerMonad[U]:
+            return self.lift(f(x))
+
+        return wrapped
+
+    __getitem__ = fun
 
 
 @final
@@ -250,8 +301,22 @@ class TappedAsyncIterator(AsyncIterator[T]):
     __floordiv__ = map_async
 
 
+class AsyncContextManagerMonad(AbstractAsyncContextManager[T]):
+    def __init__(self, context_manager: AbstractAsyncContextManager[T]) -> None:
+        self.__context_manager = context_manager
+
+    def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> Coroutine[Any, Any, bool | None]:
+        return self.__context_manager.__aexit__(exc_type, exc_value, traceback)
+
+
 pure: Final = Pure.instance
 do: Final = Do.instance
 foreach: Final = Foreach.instance
+using: Final = Using.instance
 end: Final = End.instance
 tap: Final = Tap.instance
