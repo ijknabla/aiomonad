@@ -1,5 +1,5 @@
 import pytest
-from aiomonad import pure
+from aiomonad import end, foreach, pure
 
 
 def double(i: int) -> int:
@@ -19,3 +19,8 @@ async def test_await_pure(i: int) -> None:
 
     assert await (pure(i) / double) == i * 2
     assert await (pure(i) / double / double) == i * 4
+
+
+@pytest.mark.asyncio
+async def test_foreach() -> None:
+    assert await (foreach(range(10)) % end) == tuple(range(10))
