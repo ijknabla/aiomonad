@@ -103,6 +103,8 @@ class AwaitableMonad(Awaitable[T]):
 
     __truediv__ = map
 
+    __floordiv__ = bind
+
 
 @final
 class TappedAwaitableMonad(Generic[T]):
@@ -117,6 +119,15 @@ class TappedAwaitableMonad(Generic[T]):
         return AwaitableMonad(bind())
 
     __truediv__ = map
+
+    def map_async(self, f: Callable[[T], Awaitable[U]]) -> AwaitableMonad[T]:
+        async def map_async() -> T:
+            await f(x := await self.__monad)
+            return x
+
+        return AwaitableMonad(map_async())
+
+    __floordiv__ = map_async
 
 
 @final
@@ -172,6 +183,15 @@ class AsyncIteratorMonad(AsyncIterator[T]):
 
     __truediv__ = map
 
+    def map_async(self, f: Callable[[T], Awaitable[U]]) -> AsyncIteratorMonad[U]:
+        async def map() -> AsyncIterator[U]:
+            async for x in self:
+                yield await f(x)
+
+        return AsyncIteratorMonad(map())
+
+    __floordiv__ = map_async
+
 
 class TappedAsyncIterator(Generic[T]):
     def __init__(self, monad: AsyncIteratorMonad[T]) -> None:
@@ -186,6 +206,16 @@ class TappedAsyncIterator(Generic[T]):
         return AsyncIteratorMonad(map())
 
     __truediv__ = map
+
+    def map_async(self, f: Callable[[T], Awaitable[U]]) -> AsyncIteratorMonad[T]:
+        async def map() -> AsyncIterator[T]:
+            async for x in self.__monad:
+                await f(x)
+                yield x
+
+        return AsyncIteratorMonad(map())
+
+    __floordiv__ = map_async
 
 
 pure: Final = Pure.instance
