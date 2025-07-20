@@ -23,6 +23,7 @@ class Pure(enum.Enum):
         return AwaitableMonad(awaitable())
 
 
+@final
 class AwaitableMonad(Awaitable[T]):
     def __init__(self, awaitable: Awaitable[T]) -> None:
         self.__awaitable = awaitable
