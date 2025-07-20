@@ -152,16 +152,18 @@ class End(enum.Enum):
     instance = enum.auto()
 
 
-@final
-class AwaitableMonad(Awaitable[T]):
+class BasicAwaitableMonad(Awaitable[T]):
     def __init__(self, awaitable: Awaitable[T]) -> None:
-        self.__awaitable = awaitable
+        self._awaitable = awaitable
 
     def __await__(self) -> Generator[Any, Any, T]:
-        return self.__awaitable.__await__()
+        return self._awaitable.__await__()
 
+
+@final
+class AwaitableMonad(BasicAwaitableMonad[T]):
     def tap(self) -> TappedAwaitableMonad[T]:
-        return TappedAwaitableMonad(self)
+        return TappedAwaitableMonad(self._awaitable)
 
     def __mod__(self, operation: Tap) -> TappedAwaitableMonad[T]:
         if operation is tap:
@@ -187,16 +189,10 @@ class AwaitableMonad(Awaitable[T]):
 
 
 @final
-class TappedAwaitableMonad(Awaitable[T]):
-    def __init__(self, monad: AwaitableMonad[T]) -> None:
-        self.__monad = monad
-
-    def __await__(self) -> Generator[Any, Any, T]:
-        return self.__monad.__await__()
-
+class TappedAwaitableMonad(BasicAwaitableMonad[T]):
     def map(self, f: Callable[[T], U]) -> AwaitableMonad[T]:
         async def bind() -> T:
-            f(x := await self.__monad)
+            f(x := await self)
             return x
 
         return AwaitableMonad(bind())
@@ -205,7 +201,7 @@ class TappedAwaitableMonad(Awaitable[T]):
 
     def map_async(self, f: Callable[[T], Awaitable[U]]) -> AwaitableMonad[T]:
         async def map_async() -> T:
-            await f(x := await self.__monad)
+            await f(x := await self)
             return x
 
         return AwaitableMonad(map_async())
