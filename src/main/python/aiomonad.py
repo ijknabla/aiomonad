@@ -2,6 +2,7 @@ from __future__ import annotations
 
 __all__ = [
     "pure",
+    "do",
     "foreach",
     "end",
 ]
@@ -33,6 +34,14 @@ class Pure(enum.Enum):
             return x
 
         return AwaitableMonad(awaitable())
+
+
+@final
+class Do(enum.Enum):
+    instance = enum.auto()
+
+    def __call__(self, awaitable: Awaitable[T]) -> AwaitableMonad[T]:
+        return AwaitableMonad(awaitable)
 
 
 @final
@@ -121,5 +130,6 @@ class AsyncIteratorMonad(AsyncIterator[T]):
 
 
 pure: Final = Pure.instance
+do: Final = Do.instance
 foreach: Final = Foreach.instance
 end: Final = End.instance
