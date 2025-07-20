@@ -237,7 +237,7 @@ class AsyncIteratorMonad(AsyncIterator[T]):
     def __mod__(self, operation: End) -> AwaitableMonad[tuple[T, ...]]: ...
 
     def __mod__(
-        self, operation: End | Tap
+        self, operation: Tap | End
     ) -> TappedAsyncIterator[T] | AwaitableMonad[tuple[T, ...]]:
         if operation is tap:
             return self.tap()
@@ -315,6 +315,30 @@ class AsyncContextManagerMonad(AbstractAsyncContextManager[T]):
         traceback: TracebackType | None,
     ) -> Coroutine[Any, Any, bool | None]:
         return self.__context_manager.__aexit__(exc_type, exc_value, traceback)
+
+    def tap(self) -> TappedAsyncContextManagerMonad[T]:
+        return TappedAsyncContextManagerMonad(self)
+
+    def end(self) -> AwaitableMonad[T]:
+        async def end() -> T:
+            async with self as x:
+                return x
+
+        return AwaitableMonad(end())
+
+    @overload
+    def __mod__(self, operation: Tap) -> TappedAsyncContextManagerMonad[T]: ...
+
+    @overload
+    def __mod__(self, operation: End) -> AwaitableMonad[T]: ...
+
+    def __mod__(
+        self, operation: Tap | End
+    ) -> TappedAsyncContextManagerMonad[T] | AwaitableMonad[T]:
+        if operation is tap:
+            return self.tap()
+        elif operation is end:
+            return self.end()
 
     def bind(
         self, f: Callable[[T], AbstractAsyncContextManager[U]]
