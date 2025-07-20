@@ -5,6 +5,7 @@ __all__ = [
     "do",
     "foreach",
     "end",
+    "tap",
 ]
 
 import enum
@@ -16,7 +17,7 @@ from collections.abc import (
     Generator,
     Iterable,
 )
-from typing import TYPE_CHECKING, Any, Final, TypeVar, final
+from typing import TYPE_CHECKING, Any, Final, Generic, TypeVar, final, overload
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -62,6 +63,11 @@ class Foreach(enum.Enum):
 
 
 @final
+class Tap(enum.Enum):
+    instance = enum.auto()
+
+
+@final
 class End(enum.Enum):
     instance = enum.auto()
 
@@ -73,6 +79,13 @@ class AwaitableMonad(Awaitable[T]):
 
     def __await__(self) -> Generator[Any, Any, T]:
         return self.__awaitable.__await__()
+
+    def tap(self) -> TappedAwaitableMonad[T]:
+        return TappedAwaitableMonad(self)
+
+    def __mod__(self, operation: Tap) -> TappedAwaitableMonad[T]:
+        if operation is tap:
+            return self.tap()
 
     def bind(self, f: Callable[[T], Awaitable[U]]) -> AwaitableMonad[U]:
         async def bind() -> U:
@@ -92,6 +105,21 @@ class AwaitableMonad(Awaitable[T]):
 
 
 @final
+class TappedAwaitableMonad(Generic[T]):
+    def __init__(self, monad: AwaitableMonad[T]) -> None:
+        self.__monad = monad
+
+    def map(self, f: Callable[[T], U]) -> AwaitableMonad[T]:
+        async def bind() -> T:
+            f(x := await self.__monad)
+            return x
+
+        return AwaitableMonad(bind())
+
+    __truediv__ = map
+
+
+@final
 class AsyncIteratorMonad(AsyncIterator[T]):
     def __init__(self, iterator: AsyncIterator[T]) -> None:
         self.__iterator = iterator
@@ -102,11 +130,28 @@ class AsyncIteratorMonad(AsyncIterator[T]):
     def __anext__(self) -> Awaitable[T]:
         return self.__iterator.__anext__()
 
+    def tap(self) -> TappedAsyncIterator[T]:
+        return TappedAsyncIterator(self)
+
     def end(self) -> AwaitableMonad[tuple[T, ...]]:
         async def end() -> tuple[T, ...]:
             return tuple([x async for x in self])
 
         return AwaitableMonad(end())
+
+    @overload
+    def __mod__(self, operation: Tap) -> TappedAsyncIterator[T]: ...
+
+    @overload
+    def __mod__(self, operation: End) -> AwaitableMonad[tuple[T, ...]]: ...
+
+    def __mod__(
+        self, operation: End | Tap
+    ) -> TappedAsyncIterator[T] | AwaitableMonad[tuple[T, ...]]:
+        if operation is tap:
+            return self.tap()
+        elif operation is end:
+            return self.end()
 
     def bind(self, f: Callable[[T], AsyncIterable[U]]) -> AsyncIteratorMonad[U]:
         async def bind() -> AsyncIterator[U]:
@@ -125,11 +170,26 @@ class AsyncIteratorMonad(AsyncIterator[T]):
 
         return AsyncIteratorMonad(map())
 
-    def __mod__(self, operation: End) -> AwaitableMonad[tuple[T, ...]]:
-        return self.end()
+    __truediv__ = map
+
+
+class TappedAsyncIterator(Generic[T]):
+    def __init__(self, monad: AsyncIteratorMonad[T]) -> None:
+        self.__monad = monad
+
+    def map(self, f: Callable[[T], U]) -> AsyncIteratorMonad[T]:
+        async def map() -> AsyncIterator[T]:
+            async for x in self.__monad:
+                f(x)
+                yield x
+
+        return AsyncIteratorMonad(map())
+
+    __truediv__ = map
 
 
 pure: Final = Pure.instance
 do: Final = Do.instance
 foreach: Final = Foreach.instance
 end: Final = End.instance
+tap: Final = Tap.instance
