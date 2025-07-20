@@ -264,11 +264,11 @@ class AsyncIteratorMonad(AsyncIterator[T]):
     __truediv__ = map
 
     def map_async(self, f: Callable[[T], Awaitable[U]]) -> AsyncIteratorMonad[U]:
-        async def map() -> AsyncIterator[U]:
+        async def map_async() -> AsyncIterator[U]:
             async for x in self:
                 yield await f(x)
 
-        return AsyncIteratorMonad(map())
+        return AsyncIteratorMonad(map_async())
 
     __floordiv__ = map_async
 
@@ -291,12 +291,12 @@ class TappedAsyncIterator(AsyncIterator[T]):
     __truediv__ = map
 
     def map_async(self, f: Callable[[T], Awaitable[U]]) -> AsyncIteratorMonad[T]:
-        async def map() -> AsyncIterator[T]:
+        async def map_async() -> AsyncIterator[T]:
             async for x in self.__monad:
                 await f(x)
                 yield x
 
-        return AsyncIteratorMonad(map())
+        return AsyncIteratorMonad(map_async())
 
     __floordiv__ = map_async
 
@@ -312,6 +312,39 @@ class AsyncContextManagerMonad(AbstractAsyncContextManager[T]):
         traceback: TracebackType | None,
     ) -> Coroutine[Any, Any, bool | None]:
         return self.__context_manager.__aexit__(exc_type, exc_value, traceback)
+
+    def bind(
+        self, f: Callable[[T], AbstractAsyncContextManager[U]]
+    ) -> AsyncContextManagerMonad[U]:
+        @asynccontextmanager
+        async def bind() -> AsyncIterator[U]:
+            async with self as x:
+                async with f(x) as y:
+                    yield y
+
+        return AsyncContextManagerMonad(bind())
+
+    __mul__ = bind
+
+    def map(self, f: Callable[[T], U]) -> AsyncContextManagerMonad[U]:
+        @asynccontextmanager
+        async def map() -> AsyncIterator[U]:
+            async with self as x:
+                yield f(x)
+
+        return AsyncContextManagerMonad(map())
+
+    __truediv__ = map
+
+    def map_async(self, f: Callable[[T], Awaitable[U]]) -> AsyncContextManagerMonad[U]:
+        @asynccontextmanager
+        async def map_async() -> AsyncIterator[U]:
+            async with self as x:
+                yield await f(x)
+
+        return AsyncContextManagerMonad(map_async())
+
+    __floordiv__ = map_async
 
 
 pure: Final = Pure.instance
