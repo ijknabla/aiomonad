@@ -103,7 +103,7 @@ class AwaitableMonad(Awaitable[T]):
 
     __truediv__ = map
 
-    __floordiv__ = bind
+    __floordiv__ = map_async = bind
 
 
 @final
