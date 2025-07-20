@@ -305,6 +305,9 @@ class AsyncContextManagerMonad(AbstractAsyncContextManager[T]):
     def __init__(self, context_manager: AbstractAsyncContextManager[T]) -> None:
         self.__context_manager = context_manager
 
+    def __aenter__(self) -> Coroutine[Any, Any, T]:
+        return self.__context_manager.__aenter__()
+
     def __aexit__(
         self,
         exc_type: type[BaseException] | None,
@@ -341,6 +344,44 @@ class AsyncContextManagerMonad(AbstractAsyncContextManager[T]):
         async def map_async() -> AsyncIterator[U]:
             async with self as x:
                 yield await f(x)
+
+        return AsyncContextManagerMonad(map_async())
+
+    __floordiv__ = map_async
+
+
+class TappedAsyncContextManagerMonad(AbstractAsyncContextManager[T]):
+    def __init__(self, monad: AsyncContextManagerMonad[T]) -> None:
+        self.__monad = monad
+
+    def __aenter__(self) -> Coroutine[Any, Any, T]:
+        return self.__monad.__aenter__()
+
+    def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> Coroutine[Any, Any, bool | None]:
+        return self.__monad.__aexit__(exc_type, exc_value, traceback)
+
+    def map(self, f: Callable[[T], U]) -> AsyncContextManagerMonad[T]:
+        @asynccontextmanager
+        async def map() -> AsyncIterator[T]:
+            async with self as x:
+                f(x)
+                yield x
+
+        return AsyncContextManagerMonad(map())
+
+    __truediv__ = map
+
+    def map_async(self, f: Callable[[T], Awaitable[U]]) -> AsyncContextManagerMonad[T]:
+        @asynccontextmanager
+        async def map_async() -> AsyncIterator[T]:
+            async with self as x:
+                await f(x)
+                yield x
 
         return AsyncContextManagerMonad(map_async())
 
