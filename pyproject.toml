@@ -1,0 +1,35 @@
+[project]
+name = "aiomonad"
+version = "0.0.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["aiomonad"]
+
+[tool.setuptools.package-dir]
+"" = "src/main/python"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.17.0",
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.1.0",
+    "pytest-cov>=6.2.1",
+    "ruff>=0.12.4",
+]
+
+[tool.mypy]
+explicit_package_bases = true
+mypy_path = [
+    "src/main/python",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
