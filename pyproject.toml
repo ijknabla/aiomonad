@@ -1,6 +1,6 @@
 [project]
 name = "aiomonad"
-version = "0.0.0"
+version = "0.0.0.dev0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.9"
