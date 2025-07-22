@@ -26,10 +26,19 @@ from contextlib import (
 )
 from functools import wraps
 from types import TracebackType
-from typing import Any, Final, TypeVar, final, overload
+from typing import TYPE_CHECKING, Any, Final, TypeVar, Union, final, overload
+
+if TYPE_CHECKING:
+    from typing_extensions import TypeAlias
+else:
+    TypeAlias = ...
+
 
 T = TypeVar("T")
 U = TypeVar("U")
+
+
+AsyncIterableLike: TypeAlias = Union[Iterable[T], AsyncIterable[T]]
 
 
 @final
@@ -80,7 +89,7 @@ class Do(enum.Enum):
 class Foreach(enum.Enum):
     instance = enum.auto()
 
-    def lift(self, iterable: Iterable[T] | AsyncIterable[T]) -> AsyncIteratorMonad[T]:
+    def lift(self, iterable: AsyncIterableLike[T]) -> AsyncIteratorMonad[T]:
         if isinstance(iterable, AsyncIteratorMonad):
             return iterable
         elif isinstance(iterable, AsyncIterable):
@@ -95,11 +104,21 @@ class Foreach(enum.Enum):
     __call__ = lift
 
     def fun(
-        self, f: Callable[[T], Iterable[U]] | Callable[[T], AsyncIterable[U]]
+        self,
+        f: Callable[[T], AsyncIterableLike[U]]
+        | Callable[[T], Awaitable[AsyncIterableLike[U]]],
     ) -> Callable[[T], AsyncIteratorMonad[U]]:
+        async def async_iterator(x: T, /) -> AsyncIterator[U]:
+            ys = f(x)
+            if isinstance(ys, Awaitable):
+                ys = await ys
+
+            async for y in self.lift(ys):
+                yield y
+
         @wraps(f)
         def wrapped(x: T, /) -> AsyncIteratorMonad[U]:
-            return self.lift(f(x))
+            return AsyncIteratorMonad(async_iterator(x))
 
         return wrapped
 
