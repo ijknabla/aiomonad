@@ -112,11 +112,11 @@ class Foreach(enum.Enum):
         | Callable[[T], Awaitable[AsyncIterableLike[U]]],
     ) -> Callable[[T], AsyncIteratorMonad[U]]:
         async def async_iterator(x: T, /) -> AsyncIterator[U]:
-            ys = f(x)
-            if isinstance(ys, Awaitable):
-                ys = await ys
+            iterable = f(x)
+            if isinstance(iterable, Awaitable):
+                iterable = await iterable
 
-            async for y in self.lift(ys):
+            async for y in self.lift(iterable):
                 yield y
 
         @wraps(f)
