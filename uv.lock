@@ -4,7 +4,7 @@ requires-python = ">=3.9"
 
 [[package]]
 name = "aiomonad"
-version = "0.0.0.dev0"
+version = "0.0.0.dev0+2025.7.22"
 source = { editable = "." }
 
 [package.dev-dependencies]
