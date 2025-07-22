@@ -39,6 +39,9 @@ U = TypeVar("U")
 
 
 AsyncIterableLike: TypeAlias = Union[Iterable[T], AsyncIterable[T]]
+AsyncContextManagerLike: TypeAlias = Union[
+    AbstractContextManager[T], AbstractAsyncContextManager[T]
+]
 
 
 @final
@@ -131,7 +134,7 @@ class Using(enum.Enum):
 
     def lift(
         self,
-        context_manager: AbstractContextManager[T] | AbstractAsyncContextManager[T],
+        context_manager: AsyncContextManagerLike[T],
     ) -> AsyncContextManagerMonad[T]:
         if isinstance(context_manager, AsyncContextManagerMonad):
             return context_manager
@@ -149,12 +152,21 @@ class Using(enum.Enum):
 
     def fun(
         self,
-        f: Callable[[T], AbstractContextManager[U]]
-        | Callable[[T], AbstractAsyncContextManager[U]],
+        f: Callable[[T], AsyncContextManagerLike[U]]
+        | Callable[[T], Awaitable[AsyncContextManagerLike[U]]],
     ) -> Callable[[T], AsyncContextManagerMonad[U]]:
+        @asynccontextmanager
+        async def async_context_manager(x: T, /) -> AsyncIterator[U]:
+            context = f(x)
+            if isinstance(context, Awaitable):
+                context = await context
+
+            async with self.lift(context) as y:
+                yield y
+
         @wraps(f)
         def wrapped(x: T, /) -> AsyncContextManagerMonad[U]:
-            return self.lift(f(x))
+            return AsyncContextManagerMonad(async_context_manager(x))
 
         return wrapped
 
