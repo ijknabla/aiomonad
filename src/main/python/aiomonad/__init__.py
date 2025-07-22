@@ -177,6 +177,11 @@ class AwaitableMonad(BasicAwaitable[T]):
 
     __mul__ = bind
 
+    def pipe(self, f: Callable[[Awaitable[T]], Awaitable[U]]) -> AwaitableMonad[U]:
+        return AwaitableMonad(f(self))
+
+    __matmul__ = pipe
+
     def map(self, f: Callable[[T], U]) -> AwaitableMonad[U]:
         async def bind() -> U:
             return f(await self)
@@ -251,6 +256,13 @@ class AsyncIteratorMonad(BasicAsyncIterator[T]):
         return AsyncIteratorMonad(bind())
 
     __mul__ = bind
+
+    def pipe(
+        self, f: Callable[[AsyncIterable[T]], AsyncIterator[U]]
+    ) -> AsyncIteratorMonad[U]:
+        return AsyncIteratorMonad(f(self))
+
+    __matmul__ = pipe
 
     def map(self, f: Callable[[T], U]) -> AsyncIteratorMonad[U]:
         async def map() -> AsyncIterator[U]:
@@ -347,6 +359,14 @@ class AsyncContextManagerMonad(BasicAsyncContextManager[T]):
         return AsyncContextManagerMonad(bind())
 
     __mul__ = bind
+
+    def pipe(
+        self,
+        f: Callable[[AbstractAsyncContextManager[T]], AbstractAsyncContextManager[U]],
+    ) -> AsyncContextManagerMonad[U]:
+        return AsyncContextManagerMonad(f(self))
+
+    __matmul__ = pipe
 
     def map(self, f: Callable[[T], U]) -> AsyncContextManagerMonad[U]:
         @asynccontextmanager
