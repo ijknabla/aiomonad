@@ -38,9 +38,17 @@ T = TypeVar("T")
 U = TypeVar("U")
 
 
-AsyncIterableLike: TypeAlias = Union[Iterable[T], AsyncIterable[T]]
+AsyncIterableLike: TypeAlias = Union[
+    Iterable[T],
+    AsyncIterable[T],
+    Awaitable[Iterable[T]],
+    Awaitable[AsyncIterable[T]],
+]
 AsyncContextManagerLike: TypeAlias = Union[
-    AbstractContextManager[T], AbstractAsyncContextManager[T]
+    AbstractContextManager[T],
+    AbstractAsyncContextManager[T],
+    Awaitable[AbstractContextManager[T]],
+    Awaitable[AbstractAsyncContextManager[T]],
 ]
 
 
@@ -95,33 +103,30 @@ class Foreach(enum.Enum):
     def lift(self, iterable: AsyncIterableLike[T]) -> AsyncIteratorMonad[T]:
         if isinstance(iterable, AsyncIteratorMonad):
             return iterable
-        elif isinstance(iterable, AsyncIterable):
-            return AsyncIteratorMonad(iterable.__aiter__())
 
         async def async_iterator() -> AsyncIterator[T]:
-            for x in iterable:
-                yield x
+            if isinstance(iterable, Awaitable):
+                _iterable = await iterable
+            else:
+                _iterable = iterable
+
+            if isinstance(_iterable, AsyncIterable):
+                async for x in _iterable:
+                    yield x
+            elif isinstance(_iterable, Iterable):
+                for x in _iterable:
+                    yield x
 
         return AsyncIteratorMonad(async_iterator())
 
     __call__ = lift
 
     def fun(
-        self,
-        f: Callable[[T], AsyncIterableLike[U]]
-        | Callable[[T], Awaitable[AsyncIterableLike[U]]],
+        self, f: Callable[[T], AsyncIterableLike[U]]
     ) -> Callable[[T], AsyncIteratorMonad[U]]:
-        async def async_iterator(x: T, /) -> AsyncIterator[U]:
-            iterable = f(x)
-            if isinstance(iterable, Awaitable):
-                iterable = await iterable
-
-            async for y in self.lift(iterable):
-                yield y
-
         @wraps(f)
         def wrapped(x: T, /) -> AsyncIteratorMonad[U]:
-            return AsyncIteratorMonad(async_iterator(x))
+            return AsyncIteratorMonad(self.lift(f(x)))
 
         return wrapped
 
@@ -138,35 +143,31 @@ class Using(enum.Enum):
     ) -> AsyncContextManagerMonad[T]:
         if isinstance(context_manager, AsyncContextManagerMonad):
             return context_manager
-        elif isinstance(context_manager, AbstractAsyncContextManager):
-            return AsyncContextManagerMonad(context_manager)
 
         @asynccontextmanager
         async def async_context_manager() -> AsyncIterator[T]:
-            with context_manager as x:
-                yield x
+            if isinstance(context_manager, Awaitable):
+                _context_manager = await context_manager
+            else:
+                _context_manager = context_manager
+
+            if isinstance(_context_manager, AbstractAsyncContextManager):
+                async with _context_manager as x:
+                    yield x
+            elif isinstance(_context_manager, AbstractContextManager):
+                with _context_manager as x:
+                    yield x
 
         return AsyncContextManagerMonad(async_context_manager())
 
     __call__ = lift
 
     def fun(
-        self,
-        f: Callable[[T], AsyncContextManagerLike[U]]
-        | Callable[[T], Awaitable[AsyncContextManagerLike[U]]],
+        self, f: Callable[[T], AsyncContextManagerLike[U]]
     ) -> Callable[[T], AsyncContextManagerMonad[U]]:
-        @asynccontextmanager
-        async def async_context_manager(x: T, /) -> AsyncIterator[U]:
-            context = f(x)
-            if isinstance(context, Awaitable):
-                context = await context
-
-            async with self.lift(context) as y:
-                yield y
-
         @wraps(f)
         def wrapped(x: T, /) -> AsyncContextManagerMonad[U]:
-            return AsyncContextManagerMonad(async_context_manager(x))
+            return self.lift(f(x))
 
         return wrapped
 
