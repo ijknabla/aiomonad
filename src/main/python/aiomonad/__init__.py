@@ -411,8 +411,8 @@ class End(enum.Enum):
     instance = enum.auto()
 
 
-do: Final = AwaitableMonad
-foreach: Final = AsyncIteratorMonad
-using: Final = AsyncContextManagerMonad
+do: TypeAlias = AwaitableMonad
+foreach: TypeAlias = AsyncIteratorMonad
+using: TypeAlias = AsyncContextManagerMonad
 end: Final = End.instance
 tap: Final = Tap.instance
