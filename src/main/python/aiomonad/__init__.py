@@ -209,7 +209,7 @@ class AsyncIteratorMonad(BasicAsyncIterator[T]):
     __mul__ = bind
 
     def pipe(
-        self, f: Callable[[AsyncIterable[T]], AsyncIterator[U]]
+        self, f: Callable[[AsyncIterator[T]], AsyncIterator[U]]
     ) -> AsyncIteratorMonad[U]:
         return AsyncIteratorMonad(f(self))
 
